@@ -8,9 +8,9 @@ Leé este archivo completo antes de tocar código. Si algo de lo que te piden lo
 
 Herramienta web para que la tesorera de una fundación:
 
-- registre todos los movimientos económicos de la fundación (ingresos y egresos de una cuenta general),
-- reparta presupuestos por **grupos** (por ejemplo Iglesias, Comedores) y entregue plata a **entidades** (personas físicas, iglesias, comedores, etc.),
-- vea siempre cuánto tiene disponible, saque informes y los exporte (PDF y Excel),
+- registre todos los movimientos económicos de la fundación (ingresos y egresos de una cuenta o caja general),
+- entregue fondos a **entidades** (iglesias, comedores, personas físicas, etc.) y registre gastos propios (compras, proveedores, servicios),
+- vea siempre cuánto dinero real tiene disponible en la caja, saque informes y los exporte (PDF y Excel),
 - maneje usuarios con roles y permisos, con auditoría de todo.
 
 El pedido es personal de la tesorera, no institucional. Lo desarrolla Dav (Devsign), solo. La interfaz es en **español rioplatense**. Hay pocos usuarios (tesorera con acceso total, contador en solo lectura).
@@ -24,8 +24,9 @@ El sistema es un **registro de movimientos**: no mueve plata real ni reemplaza u
 | `tesoreria-api/` | `C:\laragon\www\tesoreria-api` | Backend. Laravel solo como API (sin Blade), Sanctum para auth, spatie/laravel-permission para roles y permisos, MySQL 8 |
 | `app-tesoreria/` | `C:\Users\Giuliano\Downloads\app-tesoreria` | Frontend. Next.js (App Router) + TypeScript + Tailwind + shadcn/ui (pnpm) |
 
-- Entorno local: Laragon en Windows, PHP 8.3 (`C:\laragon\bin\php\php-8.3.16-Win32-vs16-x64`; **no está en el PATH** de PowerShell, usar la ruta completa o la terminal de Laragon), MySQL 8.0.16 o superior.
+- Entorno local: Laragon en Windows, PHP 8.3 (`C:\laragon\bin\php\php-8.3.16-Win32-vs16-x64`), MySQL 8.0.16 o superior.
 - API local: `http://tesoreria-api.test/api` (o `php artisan serve`).
+- Base de datos principal: `tesoreria`. Base de datos exclusiva de tests: `tesoreria_test`.
 - Zona horaria: `America/Argentina/Tucuman`.
 - La UI inicial se generó con v0 con datos mock. El trabajo del frontend es **reemplazar los mocks por llamadas reales** a la API.
 
@@ -34,15 +35,17 @@ El sistema es un **registro de movimientos**: no mueve plata real ni reemplaza u
 > Actualizá esta sección al final de cada sesión de trabajo.
 
 - [x] Diccionario de datos normalizado.
-- [x] Migración `2026_10_27_192239_tesoreria.php` (probada en MySQL 8): tablas, CHECK, vista de saldos, triggers y datos iniciales (Caja general, tipos de entidad, categorías).
+- [x] Migración `2026_10_27_192239_tesoreria.php`: tablas, CHECK, vista de saldos, triggers y datos iniciales.
 - [x] Laravel instalado con Sanctum y spatie/laravel-permission. Modelo `User` con `HasApiTokens`, `HasRoles` y `SoftDeletes`.
-- [ ] Seeder de roles y permisos.
-- [ ] Modelos, enums y relaciones.
-- [ ] `TreasuryService` con tests.
-- [ ] Endpoints de la API.
-- [ ] Capa `lib/api/` del front (hoy no existe: solo hay `lib/utils.ts`; los mocks están dentro de las páginas/componentes).
-- [ ] Conexión del frontend.
-- Ninguna de las dos carpetas es repositorio git todavía.
+- [x] Seeder de roles y permisos (`RolesAndPermissionsSeeder` + `InitialUserSeeder` con Karina Noble como tesorera, e `InitialCatalogsSeeder`). Tests pasando al 100% en `tesoreria_test`.
+- [x] Modelos, enums y relaciones completados (Fund, Entity, EntityType, Category, Movement, MovementVoid, MovementAttachment, AuditLog, AccessLog y User adaptado).
+- [x] `TreasuryService` adaptado al flujo directo (Caja General única para etapa 1) con tests actualizados pasando al 100%.
+- [x] Endpoints de auth (`login`, `logout`, `me`) con `access_logs`.
+- [x] CRUD de entities, entity-types, categories y funds.
+- [x] Endpoints de movements y adjuntos.
+- [x] Dashboard, informes y exportación.
+- [x] Endpoints de users, roles y auditoría.
+- [x] Conexión del frontend al 100% (Auth/Login con cookie httpOnly, Dashboard en tiempo real, Movimientos con carga/descarga de comprobantes y anulación con motivo obligatorio, Entidades CRUD, Informes con exportación PDF/Excel, Usuarios y Roles con control de permisos, y Libro de Auditoría y Accesos conectados con la API).
 
 ## 4. Reglas de oro (no negociables)
 
@@ -54,45 +57,39 @@ El sistema es un **registro de movimientos**: no mueve plata real ni reemplaza u
 6. **No edites la migración ya aplicada.** Para cambiar el esquema, creá una migración nueva.
 7. **Todo endpoint exige `auth:sanctum` y un permiso** (excepto el login).
 8. No instales paquetes nuevos, no toques `.env` ni cambies reglas de negocio sin avisar a Dav.
+9. **El agente no corre migraciones ni seeders en la base de desarrollo/producción** (`migrate`, `db:seed`, etc.): solo los crea y le pasa a Dav el comando para que lo corra él en la terminal de Laragon. Excepción autorizada por Dav: el agente sí puede ejecutar `php artisan test` utilizando la base exclusiva de pruebas `tesoreria_test`.
 
 ## 5. Dominio
 
-### Cajas (`funds`)
+### Caja (`funds`)
 
-Hay **una Caja general** (`kind = general`) y **grupos** (`kind = group`), que son subcajas con presupuesto propio. Las dos viven en la misma tabla porque se comportan igual: tienen saldo y son origen o destino de movimientos.
+- En esta etapa inicial la tesorería opera con **una única Caja general** (`kind = general`), que representa la cuenta/disponibilidad real de la fundación.
+- La funcionalidad de "subcajas/grupos presupuestarios" queda **pausada** hasta que Karina valide el uso en producción.
 
 ### Tipos de movimiento
 
-| type | from_fund | to_fund | entity | Qué es |
-|---|---|---|---|---|
-| `ingreso` | — | Caja general | donante (opcional) | Depósitos, donaciones. Entra plata de afuera |
-| `egreso` | Caja general **o** un grupo | — | destinatario | Gasto o entrega. Sale plata hacia afuera |
-| `asignacion` | Caja general | un grupo | — | Movimiento **interno**: reparte presupuesto. No es un gasto |
-| `devolucion` | un grupo | Caja general | — | Movimiento **interno**: el grupo devuelve sobrante |
+| type | from_fund | to_fund | entity | category | Qué es |
+|---|---|---|---|---|---|
+| `ingreso` | — | Caja general | donante/origen (opcional) | categoría `ingreso` (obligatoria) | Donaciones, depósitos bancarios, subsidios recibidos. Entra dinero a la fundación |
+| `egreso` | Caja general | — | destinatario/proveedor (opcional si es gasto menor) | categoría `egreso` (obligatoria) | Salida real de dinero: entregas a iglesias/comedores, compras de insumos, servicios, etc. |
 
-### Ejemplo de referencia (usalo en los tests)
+### Dinámica de saldos
 
-1. Ingreso de $10.000.000 → Caja general = 10.000.000.
-2. Asignación de $2.000.000 al grupo Iglesias → Caja general = 8.000.000, Iglesias = 2.000.000.
-3. Egreso de $500.000 desde Iglesias a una iglesia integrante → Iglesias = 1.500.000, Caja general = **8.000.000** (no cambia).
-4. Asignación de $1.000.000 a Comedores → Caja general = 7.000.000, Comedores = 1.000.000.
-5. **Total de fondos** = suma de saldos de todas las cajas = 9.500.000 (= ingresos − egresos). Reservado en grupos = 2.500.000.
+- **Saldo disponible real** = $\sum \text{Ingresos no anulados} - \sum \text{Egresos no anulados}$.
+- Cada egreso reduce inmediatamente el disponible de la Caja general (la plata salió realmente).
+- Los informes permiten clasificar los egresos por:
+  - **Categoría**: Gastos generales, Servicios, Ayudas y subsidios, etc.
+  - **Tipo de Entidad**: Iglesias, Comedores, Proveedores, etc.
+  - **Entidad puntual**: Historial detallado de cuánto dinero recibió o facturó cada entidad.
 
-### Reglas de validación (en `TreasuryService`, no solo en el formulario)
+### Reglas de validación (en `TreasuryService`)
 
 - `amount > 0`, con hasta 2 decimales.
-- No se puede mover más de lo disponible en la caja de origen (error `insufficient_funds`).
-- `ingreso` va siempre a la Caja general. `asignacion` va de la Caja general a un grupo activo. `devolucion` va de un grupo a la Caja general.
-- Un `egreso` desde un grupo **exige una entidad que sea integrante de ese grupo** (`entities.group_id`).
-- La categoría debe coincidir con el flujo: categorías `ingreso` para ingresos, `egreso` para egresos; las internas no llevan categoría.
-- `asignacion` y `devolucion` no llevan entidad.
-- No se puede anular un movimiento si dejaría un saldo negativo (por ejemplo, anular una asignación cuya plata ya se entregó). Hay que anular primero los movimientos posteriores (error `cannot_void`).
-- Los informes cuentan como **gasto real** solo los `egreso`. Las asignaciones y devoluciones se muestran aparte como movimientos internos.
-
-### Supuestos pendientes de confirmar con la tesorera
-
-- La `devolucion` es un agregado propio, no estaba en el pedido original.
-- Una entidad pertenece a un solo grupo a la vez (si hace falta más de uno, se pasa a una tabla pivote).
+- No se puede realizar un egreso si supera el saldo disponible de la Caja general (error `insufficient_funds`).
+- `ingreso` va siempre a la Caja general y exige una categoría de flujo `ingreso`.
+- `egreso` sale siempre de la Caja general y exige una categoría de flujo `egreso`. La entidad es opcional para permitir gastos menores directos.
+- No se puede anular un movimiento si ya está anulado, o si la anulación de un ingreso dejase el saldo total en negativo (error `cannot_void`).
+- Anular exige motivo obligatorio (`reason`).
 
 ## 6. Modelo de datos (resumen)
 
@@ -201,3 +198,146 @@ Base `/api`. JSON. Usar **API Resources** de Laravel. Montos como string decimal
 7. Dashboard, informes y exportación (paquetes de PDF y Excel: **consultar a Dav antes de elegirlos**).
 8. Endpoints de users, roles y auditoría.
 9. Conectar el frontend, módulo por módulo, reemplazando los mocks.
+
+===
+
+<laravel-boost-guidelines>
+=== foundation rules ===
+
+# Laravel Boost Guidelines
+
+## Foundational Context
+
+This application is a Laravel application running on PHP 8.3. Always use the APIs that match the installed major version of each package — do not assume a version.
+
+Before relying on a package's API, confirm its installed version:
+- PHP packages: run `composer show --direct` to list direct dependencies with versions, or `composer show <vendor/package>` for a single package.
+- JS packages: check `package.json` for the installed versions.
+
+## Skills Activation
+
+This project has domain-specific skills available in `**/skills/**`. You MUST activate the relevant skill whenever you work in that domain—don't wait until you're stuck.
+
+## Conventions
+
+- You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
+- Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
+- Check for existing components to reuse before writing a new one.
+
+## Verification Scripts
+
+- Do not create verification scripts or tinker when tests cover that functionality and prove they work. Unit and feature tests are more important.
+
+## Application Structure & Architecture
+
+- Stick to existing directory structure; don't create new base folders without approval.
+- Do not change the application's dependencies without approval.
+
+## Frontend Bundling
+
+- If a frontend change doesn't show in the UI or you get a "Unable to locate file in Vite manifest" error, run `npm run build` or ask the user to run `npm run dev` or `composer run dev`.
+
+## Documentation Files
+
+- You must only create documentation files if explicitly requested by the user.
+
+=== boost rules ===
+
+# Laravel Boost
+
+## Tools
+
+- Laravel Boost is an MCP server with tools designed specifically for this application. Prefer Boost tools over manual alternatives like shell commands or file reads.
+- Use `database-query` to run read-only queries against the database instead of writing raw SQL in tinker.
+- Use `database-schema` to inspect table structure before writing migrations or models.
+- Use `get-absolute-url` to resolve the correct scheme, domain, and port for project URLs. Always use this before sharing a URL with the user.
+- Use `browser-logs` to read browser logs, errors, and exceptions. Only recent logs are useful, ignore old entries.
+
+## Searching Documentation (IMPORTANT)
+
+- Use `search-docs` before changes that depend on Laravel ecosystem APIs, behavior, configuration, or version-specific syntax. Skip it for copy-only edits and other changes where package documentation is irrelevant. Reuse sufficient results already in context instead of searching again.
+- Pass a `packages` array to scope results when you know which packages are relevant.
+- Use multiple broad, topic-based queries: `['rate limiting', 'routing rate limiting', 'routing']`. Expect the most relevant results first.
+- Do not add package names to queries because package info is already shared. Use `test resource table`, not `filament 4 test resource table`.
+
+### Search Syntax
+
+1. Use words for auto-stemmed AND logic: `rate limit` matches both "rate" AND "limit".
+2. Use `"quoted phrases"` for exact position matching: `"infinite scroll"` requires adjacent words in order.
+3. Combine words and phrases for mixed queries: `middleware "rate limit"`.
+4. Use multiple queries for OR logic: `queries=["authentication", "middleware"]`.
+
+## Project Rules
+
+- This project contains committed, area-grouped rules in `.ai/rules` when that directory exists, including path-scoped framework guidelines under `.ai/rules/boost`. Before you enter plan mode or create/edit any file, you MUST first: open @.ai/rules/index.md (it maps file globs to rule files), read every rule file whose globs cover the path(s) in scope, and run `grep -rin 'keyword' .ai/rules` to catch what a path match alone misses. Do not write code until you have read and are following every matching rule. If `.ai/rules` does not exist, continue without it.
+
+## Artisan
+
+- Run Artisan commands directly via the command line (e.g., `php artisan route:list`). Use `php artisan list` to discover available commands and `php artisan [command] --help` to check parameters.
+- Inspect routes with `php artisan route:list`. Filter with: `--method=GET`, `--name=users`, `--path=api`, `--except-vendor`, `--only-vendor`.
+- Read configuration values using dot notation: `php artisan config:show app.name`, `php artisan config:show database.default`. Or read config files directly from the `config/` directory.
+
+## Tinker
+
+- Execute PHP in app context for debugging and testing code. Do not create models without user approval, prefer tests with factories instead. Prefer existing Artisan commands over custom tinker code.
+- Always use single quotes to prevent shell expansion: `php artisan tinker --execute 'Your::code();'`
+  - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
+
+=== php rules ===
+
+# PHP
+
+- Always use curly braces for control structures, even for single-line bodies.
+- Use PHP 8 constructor property promotion: `public function __construct(public GitHub $github) { }`. Do not leave empty zero-parameter `__construct()` methods unless the constructor is private.
+- Use explicit return type declarations and type hints for all method parameters: `function isAccessible(User $user, ?string $path = null): bool`
+- Use TitleCase for Enum keys: `FavoritePerson`, `BestLake`, `Monthly`.
+- Prefer PHPDoc blocks over inline comments. Only add inline comments for exceptionally complex logic.
+- Use array shape type definitions in PHPDoc blocks.
+
+=== deployments rules ===
+
+# Deployment
+
+- Laravel can be deployed using [Laravel Cloud](https://cloud.laravel.com/), which is the fastest way to deploy and scale production Laravel applications.
+
+=== laravel/core rules ===
+
+# Do Things the Laravel Way
+
+- Use `php artisan make:` commands to create new files (i.e. migrations, controllers, models, etc.). You can list available Artisan commands using `php artisan list` and check their parameters with `php artisan [command] --help`.
+- If you're creating a generic PHP class, use `php artisan make:class`.
+- Pass `--no-interaction` to all Artisan commands to ensure they work without user input. You should also pass the correct `--options` to ensure correct behavior.
+
+### Model Creation
+
+- When creating new models, create useful factories and seeders for them too. Ask the user if they need any other things, using `php artisan make:model --help` to check the available options.
+
+## APIs & Eloquent Resources
+
+- For APIs, default to using Eloquent API Resources and API versioning unless existing API routes do not, then you should follow existing application convention.
+
+## URL Generation
+
+- When generating links to other pages, prefer named routes and the `route()` function.
+
+## Testing
+
+- When creating models for tests, use the factories for the models. Check if the factory has custom states that can be used before manually setting up the model.
+- Faker: Use methods such as `$this->faker->word()` or `fake()->randomDigit()`. Follow existing conventions whether to use `$this->faker` or `fake()`.
+- When creating tests, make use of `php artisan make:test [options] {name}` to create a feature test, and pass `--unit` to create a unit test. Most tests should be feature tests.
+
+=== phpunit/core rules ===
+
+# PHPUnit
+
+- This project uses PHPUnit. Create tests with `php artisan make:test --phpunit {name}`.
+- Do not include the test suite directory in `{name}`. Use `SomeFeatureTest`, not `Feature/SomeFeatureTest`.
+- Read the `testing-best-practices` skill for guidance on coverage, naming, structure, dependency isolation, and review.
+
+## Running Tests
+
+- Run the narrowest set of tests that covers the change. Pass a file path or `--filter=testName` to `php artisan test --compact`.
+- Rerun a test after each change to it.
+- Run `vendor/bin/phpunit` to call the test runner directly. It accepts the same file path and `--filter=testName` arguments.
+
+</laravel-boost-guidelines>

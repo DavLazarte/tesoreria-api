@@ -204,7 +204,7 @@ CREATE TABLE access_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL,
 <<<'SQL'
-CREATE VIEW v_fund_balances AS
+CREATE OR REPLACE VIEW v_fund_balances AS
 SELECT f.id AS fund_id, f.name, f.kind,
   COALESCE(SUM(CASE WHEN v.id IS NULL AND m.to_fund_id = f.id THEN m.amount END), 0)
   - COALESCE(SUM(CASE WHEN v.id IS NULL AND m.from_fund_id = f.id THEN m.amount END), 0) AS balance
