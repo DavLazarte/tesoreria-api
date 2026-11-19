@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EntityController;
 use App\Http\Controllers\Api\EntityTypeController;
 use App\Http\Controllers\Api\FundController;
+use App\Http\Controllers\Api\MovementAccountabilityController;
 use App\Http\Controllers\Api\MovementController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RoleController;
@@ -43,6 +44,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/movements/{movement}/void', [MovementController::class, 'void'])->middleware('permission:movements.void');
     Route::post('/movements/{movement}/attachments', [MovementController::class, 'storeAttachment'])->middleware('permission:movements.create');
     Route::get('/movements/{movement}/attachments/{attachment}', [MovementController::class, 'downloadAttachment'])->middleware('permission:movements.view');
+
+    // Rendiciones de cuenta de movimientos
+    Route::get('/accountabilities', [MovementAccountabilityController::class, 'index'])->middleware('permission:movements.view');
+    Route::post('/movements/{movement}/accountabilities', [MovementAccountabilityController::class, 'store'])->middleware('permission:movements.create');
+    Route::get('/movements/{movement}/accountabilities/{accountability}/attachments/{attachment}', [MovementAccountabilityController::class, 'downloadAttachment'])->middleware('permission:movements.view');
 
     // Entidades
     Route::get('/entities', [EntityController::class, 'index'])->middleware('permission:entities.view');

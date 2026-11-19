@@ -31,7 +31,8 @@ class MovementController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $query = Movement::query()
-            ->with(['fromFund', 'toFund', 'entity.entityType', 'category', 'creator', 'void.user', 'attachments']);
+            ->with(['fromFund', 'toFund', 'entity.entityType', 'category', 'creator', 'void.user', 'attachments', 'accountabilities.attachments'])
+            ->withCount('accountabilities');
 
         // Filtro por fecha desde / hasta
         if ($request->filled('from')) {
@@ -104,7 +105,17 @@ class MovementController extends Controller
      */
     public function show(Movement $movement): MovementResource
     {
-        $movement->load(['fromFund', 'toFund', 'entity.entityType', 'category', 'creator', 'void.user', 'attachments.uploader']);
+        $movement->load([
+            'fromFund',
+            'toFund',
+            'entity.entityType',
+            'category',
+            'creator',
+            'void.user',
+            'attachments.uploader',
+            'accountabilities.creator',
+            'accountabilities.attachments.uploader',
+        ]);
 
         return new MovementResource($movement);
     }
@@ -120,7 +131,17 @@ class MovementController extends Controller
             user: $request->user()
         );
 
-        $movement->load(['fromFund', 'toFund', 'entity.entityType', 'category', 'creator', 'void.user', 'attachments.uploader']);
+        $movement->load([
+            'fromFund',
+            'toFund',
+            'entity.entityType',
+            'category',
+            'creator',
+            'void.user',
+            'attachments.uploader',
+            'accountabilities.creator',
+            'accountabilities.attachments.uploader',
+        ]);
 
         return response()->json([
             'message' => 'Movimiento anulado correctamente.',

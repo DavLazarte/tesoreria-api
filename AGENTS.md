@@ -47,6 +47,12 @@ El sistema es un **registro de movimientos**: no mueve plata real ni reemplaza u
 - [x] Endpoints de users, roles y auditoría.
 - [x] Conexión del frontend al 100% (Auth/Login con cookie httpOnly, Dashboard en tiempo real, Movimientos con carga/descarga de comprobantes y anulación con motivo obligatorio, Entidades CRUD, Informes con exportación PDF/Excel, Usuarios y Roles con control de permisos, y Libro de Auditoría y Accesos conectados con la API).
 - [x] Despliegue en producción completado con éxito (Backend en VPS con Nginx, PHP 8.3 y SSL en https://funda-api.devsign.ar; Frontend en Vercel con dominio en https://fundacion.devsign.ar).
+- [x] Rendición de cuentas de egresos (tablas `movement_accountabilities` y `accountability_attachments`, API con auditoría y subida de boletas/recibos, modal y visualización en el detalle del movimiento).
+- [x] Accesos rápidos de creación al vuelo para Entidades y Categorías desde el formulario de Nuevo Movimiento.
+- [x] PWA instalable (manifest, service worker y modal de instalación para Android/Desktop/iOS), navegación inferior fija en móviles (BottomNav), vista en tarjetas para celulares sin scroll horizontal, y eliminación del zoom automático en iOS.
+- [x] Módulo y pestaña de Categorías en Entidades (`/entities`) con CRUD completo (creación, edición, activación/desactivación y conteo de movimientos).
+- [x] Pestaña de Rendiciones de Cuentas en Movimientos (`/movements`) con vista centralizada, filtros de búsqueda, visualización de egresos vinculados y descarga directa de boletas/comprobantes. Endpoint `GET /api/accountabilities` con tests pasando al 100%.
+- [x] Dashboard actualizado con métrica de Rendiciones del mes (4ta tarjeta) y nuevo bloque visual de "Entregas y Rendición por Entidad" (fondos entregados, importe justificado con boletas, saldo pendiente y porcentaje).
 
 ## 4. Reglas de oro (no negociables)
 

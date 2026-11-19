@@ -73,6 +73,11 @@ class Movement extends Model
         return $this->hasMany(MovementAttachment::class);
     }
 
+    public function accountabilities(): HasMany
+    {
+        return $this->hasMany(MovementAccountability::class)->orderByDesc('rendered_at')->orderByDesc('id');
+    }
+
     public function isVoided(): bool
     {
         return $this->void !== null;

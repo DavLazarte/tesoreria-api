@@ -41,6 +41,19 @@ class DashboardController extends Controller
             ->whereBetween('movement_date', [$startOfMonth, $endOfMonth])
             ->sum('amount');
 
+        // Rendiciones de cuenta registradas en el mes
+        $renderedMonth = \App\Models\MovementAccountability::query()
+            ->whereBetween('rendered_at', [$startOfMonth, $endOfMonth])
+            ->sum('amount');
+
+        // Egresos del mes pendientes de rendición
+        $pendingAccountabilitiesCount = Movement::query()
+            ->where('type', 'egreso')
+            ->whereDoesntHave('void')
+            ->whereBetween('movement_date', [$startOfMonth, $endOfMonth])
+            ->doesntHave('accountabilities')
+            ->count();
+
         // 3. Evolución mensual de los últimos 6 meses (ingresos vs egresos)
         $sixMonthsAgo = Carbon::now()->subMonths(5)->startOfMonth()->toDateString();
 
@@ -88,15 +101,54 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
+        // 6. Principales entidades destinatarias de fondos (Top 5 con entregas y rendiciones)
+        $monthMovementsWithEntity = Movement::query()
+            ->where('type', 'egreso')
+            ->whereNotNull('entity_id')
+            ->whereDoesntHave('void')
+            ->whereBetween('movement_date', [$startOfMonth, $endOfMonth])
+            ->with(['entity.entityType', 'accountabilities'])
+            ->get();
+
+        $topEntitiesSource = $monthMovementsWithEntity->isNotEmpty()
+            ? $monthMovementsWithEntity
+            : Movement::query()
+                ->where('type', 'egreso')
+                ->whereNotNull('entity_id')
+                ->whereDoesntHave('void')
+                ->with(['entity.entityType', 'accountabilities'])
+                ->get();
+
+        $topEntities = $topEntitiesSource->groupBy('entity_id')->map(function ($movs) {
+            $first = $movs->first();
+            $entity = $first->entity;
+            $delivered = $movs->sum('amount');
+            $rendered = $movs->flatMap->accountabilities->sum('amount');
+            $pending = max(0, $delivered - $rendered);
+
+            return [
+                'id' => $entity->id,
+                'name' => $entity->name,
+                'type' => $entity->entityType?->name ?? 'Entidad',
+                'delivered' => number_format((float) $delivered, 2, '.', ''),
+                'rendered' => number_format((float) $rendered, 2, '.', ''),
+                'pending' => number_format((float) $pending, 2, '.', ''),
+                'movements_count' => $movs->count(),
+            ];
+        })->sortByDesc(fn ($item) => (float) $item['delivered'])->values()->take(5);
+
         return response()->json([
             'general_available' => $generalAvailable,
             'total_funds' => $generalAvailable, // En etapa 1 con Caja única, coincide exactamente
             'month' => [
                 'incomes' => number_format((float) $incomesMonth, 2, '.', ''),
                 'expenses' => number_format((float) $expensesMonth, 2, '.', ''),
+                'rendered' => number_format((float) $renderedMonth, 2, '.', ''),
+                'pending_count' => $pendingAccountabilitiesCount,
             ],
             'monthly' => $monthly,
             'expenses_by_entity_type' => $expensesByEntityType,
+            'top_entities' => $topEntities,
             'latest_movements' => MovementResource::collection($latestMovements),
         ]);
     }

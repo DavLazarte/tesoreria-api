@@ -32,6 +32,8 @@ class MovementResource extends JsonResource
             'is_voided' => $this->isVoided(),
             'void' => new MovementVoidResource($this->whenLoaded('void')),
             'attachments' => MovementAttachmentResource::collection($this->whenLoaded('attachments')),
+            'accountabilities' => MovementAccountabilityResource::collection($this->whenLoaded('accountabilities')),
+            'accountabilities_count' => $this->accountabilities_count ?? ($this->relationLoaded('accountabilities') ? $this->accountabilities->count() : 0),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }
