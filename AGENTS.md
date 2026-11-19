@@ -46,6 +46,7 @@ El sistema es un **registro de movimientos**: no mueve plata real ni reemplaza u
 - [x] Dashboard, informes y exportación.
 - [x] Endpoints de users, roles y auditoría.
 - [x] Conexión del frontend al 100% (Auth/Login con cookie httpOnly, Dashboard en tiempo real, Movimientos con carga/descarga de comprobantes y anulación con motivo obligatorio, Entidades CRUD, Informes con exportación PDF/Excel, Usuarios y Roles con control de permisos, y Libro de Auditoría y Accesos conectados con la API).
+- [x] Despliegue en producción completado con éxito (Backend en VPS con Nginx, PHP 8.3 y SSL en https://funda-api.devsign.ar; Frontend en Vercel con dominio en https://fundacion.devsign.ar).
 
 ## 4. Reglas de oro (no negociables)
 
